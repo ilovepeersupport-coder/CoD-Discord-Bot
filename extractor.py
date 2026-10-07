@@ -101,6 +101,7 @@ class ScoreboardExtractor:
         )
 
         import asyncio
+        import random
 
         def _call_gemini():
             return client.models.generate_content(
@@ -109,7 +110,27 @@ class ScoreboardExtractor:
                 config=config
             )
 
-        response = await asyncio.to_thread(_call_gemini)
+        # Retry with exponential back-off before falling back to OCR
+        max_retries = 3
+        base_delay = 2.0  # seconds
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = await asyncio.to_thread(_call_gemini)
+                break  # Success – exit the retry loop
+            except Exception as exc:
+                if attempt == max_retries:
+                    logger.warning(
+                        "Gemini failed after %d attempt(s) (%s). Handing off to OCR fallback.",
+                        attempt, exc
+                    )
+                    raise  # Re-raise so extract_from_bytes can catch it and use OCR
+                delay = base_delay * (2 ** (attempt - 1)) + random.random()
+                logger.info(
+                    "Gemini attempt %d/%d failed (%s). Retrying in %.1fs…",
+                    attempt, max_retries, exc, delay
+                )
+                await asyncio.sleep(delay)
 
         # Parse result
         raw_text = response.text

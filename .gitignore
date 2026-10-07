@@ -18,3 +18,6 @@ ENV/
 cli_series_summary.*
 cod_series_*
 *.log
+cod_bot.db
+cod_bot.db-shm
+cod_bot.db-wal

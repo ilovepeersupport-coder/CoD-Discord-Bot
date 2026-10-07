@@ -20,6 +20,7 @@ from extractor import ScoreboardExtractor
 from stats_manager import StatsManager
 from image_generator import GraphicGenerator
 from csv_exporter import CSVExporter
+from series_storage import SeriesStorage
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +37,7 @@ logger = logging.getLogger("cod_bot")
 DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 DEFAULT_ENGINE = os.getenv("DEFAULT_ENGINE", "gemini")
+SERIES_DB_PATH = os.getenv("SERIES_DB_PATH") or "cod_bot.db"
 
 # Initialize Discord Client
 intents = discord.Intents.default()
@@ -44,7 +46,9 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!cod ", intents=intents)
 
 # Active series tracking per channel: channel_id -> SeriesData
-active_series: Dict[int, Dict[str, Any]] = {}
+series_storage = SeriesStorage(SERIES_DB_PATH)
+active_series: Dict[int, Dict[str, Any]] = series_storage.load_all()
+logger.info("Restored %s active series from %s", len(active_series), SERIES_DB_PATH)
 
 # Active engine setting per guild/channel
 channel_engine_preference: Dict[int, str] = {}
@@ -109,6 +113,7 @@ async def start_series(
         "maps": [],
         "created_by": interaction.user.display_name
     }
+    series_storage.save(channel_id, active_series[channel_id])
 
     embed = discord.Embed(
         title="🎮 Series Tracking Started!",
@@ -198,6 +203,7 @@ async def upload_map(
             series["maps"].append(map_entry)
             series["maps"].sort(key=lambda x: x["map_number"])
             action_text = f"Added Map {current_map_num}"
+        series_storage.save(channel_id, series)
 
         # Generate confirmation embed
         embed = discord.Embed(
@@ -430,6 +436,7 @@ async def edit_stat(
 
     old_val = player.get(stat_lower, 0)
     player[stat_lower] = int(new_value)
+    series_storage.save(channel_id, series)
 
     await interaction.response.send_message(
         f"✅ Updated **{player['name']}** on Map {target_map_num}: `{stat_lower}` changed from **{old_val}** to **{new_value}**."
@@ -449,6 +456,7 @@ async def remove_map(interaction: discord.Interaction, map_number: int):
     series["maps"] = [m for m in series["maps"] if m["map_number"] != map_number]
 
     if len(series["maps"]) < before_count:
+        series_storage.save(channel_id, series)
         await interaction.response.send_message(f"🗑️ Removed Map {map_number} from the series.")
     else:
         await interaction.response.send_message(f"⚠️ Map {map_number} was not found.")
@@ -459,6 +467,7 @@ async def reset_series(interaction: discord.Interaction):
     channel_id = interaction.channel_id
     if channel_id in active_series:
         del active_series[channel_id]
+        series_storage.delete(channel_id)
         await interaction.response.send_message("🧹 Series data cleared. You can start a fresh series with `/start_series`.")
     else:
         await interaction.response.send_message("ℹ️ No active series was running in this channel.")

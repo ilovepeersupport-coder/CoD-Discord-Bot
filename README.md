@@ -18,6 +18,7 @@ The bot automatically parses each scoreboard, tracks player performance across a
 - **🎨 Broadcast-Quality Infographic Card**: Dynamically generates a sleek, dark-mode CDL-style match summary image (`.png`) with team scores, MVP badge, and color-coded K/D table.
 - **📊 One-Click CSV Export**: Attaches a clean `.csv` spreadsheet to easily import match data directly into Google Sheets or league tracking spreadsheets.
 - **✏️ Quick Corrections**: Typo or weird character? Easily adjust any number with `/edit_stat [player] [stat] [value]` in seconds.
+- **💾 Persistent Active Series**: Active matches and uploaded map stats are stored in SQLite and restored after the bot restarts.
 
 ---
 
@@ -34,7 +35,7 @@ Copy `.env.example` to `.env`:
 ```bash
 copy .env.example .env
 ```
-Open `.env` and fill in your two keys:
+Open `.env` and fill in your keys:
 1. **`DISCORD_BOT_TOKEN`**:
    - Go to the [Discord Developer Portal](https://discord.com/developers/applications).
    - Click **New Application** (e.g. name it "CoD League Stats").
@@ -52,6 +53,10 @@ Open `.env` and fill in your two keys:
 2. **`GEMINI_API_KEY`**:
    - Get a free key at [Google AI Studio](https://aistudio.google.com/app/apikey).
    - Paste the key into `GEMINI_API_KEY=` in your `.env` file.
+
+3. **`SERIES_DB_PATH`** (optional):
+   - Defaults to `cod_bot.db` in the bot's working directory.
+   - For hosted deployments, point this to a persistent disk/volume so active series remain available across restarts or redeploys. The database file is created automatically.
 
 ### Step 3: Run the Bot
 ```bash

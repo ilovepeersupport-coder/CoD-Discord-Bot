@@ -93,6 +93,12 @@ class TestCoDStats(unittest.TestCase):
         # Check MVP exists
         mvp = result["mvp"]
         self.assertIsNotNone(mvp)
+        self.assertEqual(len(result["top_players"]), 3)
+        self.assertEqual(
+            result["top_players"],
+            result["players"][:3],
+        )
+        self.assertEqual(result["top_players"][0]["name"], mvp["name"])
         print(f"\n[Test] Calculated MVP: {mvp['name']} with K/D {mvp['kd']} and Rating {mvp['mvp_rating']}")
 
     def test_graphic_generation(self):

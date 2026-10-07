@@ -348,6 +348,17 @@ async def series_summary(interaction: discord.Interaction):
         if highlights:
             embed.add_field(name="Performance Highlights", value="\n".join(highlights), inline=False)
 
+        podium = ["🥇", "🥈", "🥉"]
+        top_player_lines = []
+        for place, player in enumerate(aggregated.get("top_players", []), start=1):
+            top_player_lines.append(
+                f"{podium[place - 1]} **{player['name']}** ({player['team']}) — "
+                f"Rating `{player['mvp_rating']:.1f}` | K/D `{player['kd']:.2f}` | "
+                f"Kills `{player['kills']}` | Damage `{player['damage']:,}`"
+            )
+        if top_player_lines:
+            embed.add_field(name="Top 3 Players", value="\n".join(top_player_lines), inline=False)
+
         # Quick text overview table
         overview_lines = ["```", f"{'Player':<15} {'Maps':<5} {'K/D':<6} {'Avg K':<6} {'Total Dmg':<9}", "-" * 45]
         for p in aggregated.get("players", [])[:10]:

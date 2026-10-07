@@ -204,6 +204,7 @@ class StatsManager:
         top_kills = max(aggregated_players, key=lambda x: x["kills"]) if aggregated_players else None
         top_damage = max(aggregated_players, key=lambda x: x["damage"]) if aggregated_players else None
         top_kd = max(aggregated_players, key=lambda x: x["kd"]) if aggregated_players else None
+        top_players = aggregated_players[:3]
 
         return {
             "total_maps": len(maps_data),
@@ -211,6 +212,7 @@ class StatsManager:
             "team_wins": dict(team_wins),
             "team_total_scores": dict(team_total_scores),
             "players": aggregated_players,
+            "top_players": top_players,
             "mvp": mvp,
             "top_kills": top_kills,
             "top_damage": top_damage,

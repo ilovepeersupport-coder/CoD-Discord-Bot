@@ -14,7 +14,7 @@ The bot automatically parses each scoreboard, tracks player performance across a
   - Overall K/D ratio ($Kills / Deaths$) and $+/-$ Kill Differential
   - Per-map averages (Avg Kills, Avg Deaths, Avg Damage, Avg Score)
   - Map-by-map performance records per player
-- **🏆 Series MVP & Leaderboards**: Automatically calculates the Series MVP, Most Kills, Most Damage, and Top K/D.
+- **🏆 Series MVP & Leaderboards**: Automatically calculates the Series MVP and highlights the top three players by MVP rating, alongside Most Kills, Most Damage, and Top K/D.
 - **🎨 Broadcast-Quality Infographic Card**: Dynamically generates a sleek, dark-mode CDL-style match summary image (`.png`) with team scores, MVP badge, and color-coded K/D table.
 - **📊 One-Click CSV Export**: Attaches a clean `.csv` spreadsheet to easily import match data directly into Google Sheets or league tracking spreadsheets.
 - **✏️ Quick Corrections**: Typo or weird character? Easily adjust any number with `/edit_stat [player] [stat] [value]` in seconds.

@@ -14,6 +14,19 @@ from pydantic import BaseModel, Field
 # Setup logging
 logger = logging.getLogger("cod_extractor")
 
+# Suppress the SDK's noisy "AFC is enabled / direct use not recommended" warning.
+# This fires because we pass a Pydantic response_schema (which the SDK converts
+# to function-calling internally).  It is harmless and not actionable.
+logging.getLogger("google_genai.models").setLevel(logging.ERROR)
+
+# Model preference order: try the most capable first, fall back to lighter models
+# if the primary is overloaded (503 UNAVAILABLE).
+GEMINI_MODEL_ORDER = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+]
+
 
 # Pydantic Schemas for Structured Gemini Output
 class PlayerRow(BaseModel):
@@ -103,34 +116,43 @@ class ScoreboardExtractor:
         import asyncio
         import random
 
-        def _call_gemini():
-            return client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=[image_part, "Extract the full scoreboard statistics for both teams and all players."],
-                config=config
-            )
-
-        # Retry with exponential back-off before falling back to OCR
-        max_retries = 3
+        # Retry across models: try 3.8-flash first, then lighter models if overloaded
+        max_retries_per_model = 2
         base_delay = 2.0  # seconds
+        response = None
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                response = await asyncio.to_thread(_call_gemini)
-                break  # Success – exit the retry loop
-            except Exception as exc:
-                if attempt == max_retries:
-                    logger.warning(
-                        "Gemini failed after %d attempt(s) (%s). Handing off to OCR fallback.",
-                        attempt, exc
-                    )
-                    raise  # Re-raise so extract_from_bytes can catch it and use OCR
-                delay = base_delay * (2 ** (attempt - 1)) + random.random()
-                logger.info(
-                    "Gemini attempt %d/%d failed (%s). Retrying in %.1fs…",
-                    attempt, max_retries, exc, delay
+        for model_name in GEMINI_MODEL_ORDER:
+            def _call_gemini(m=model_name):
+                return client.models.generate_content(
+                    model=m,
+                    contents=[image_part, "Extract the full scoreboard statistics for both teams and all players."],
+                    config=config
                 )
-                await asyncio.sleep(delay)
+
+            for attempt in range(1, max_retries_per_model + 1):
+                try:
+                    response = await asyncio.to_thread(_call_gemini)
+                    logger.info("Gemini extraction succeeded with model: %s", model_name)
+                    break  # inner loop: success
+                except Exception as exc:
+                    if attempt == max_retries_per_model:
+                        logger.info(
+                            "Model %s unavailable after %d attempt(s) (%s). Trying next model…",
+                            model_name, attempt, exc
+                        )
+                    else:
+                        delay = base_delay * (2 ** (attempt - 1)) + random.random()
+                        logger.info(
+                            "Gemini attempt %d/%d on %s failed (%s). Retrying in %.1fs…",
+                            attempt, max_retries_per_model, model_name, exc, delay
+                        )
+                        await asyncio.sleep(delay)
+            if response is not None:
+                break  # outer loop: a model succeeded
+
+        if response is None:
+            raise RuntimeError("All Gemini models returned errors. Handing off to OCR fallback.")
+
 
         # Parse result
         raw_text = response.text

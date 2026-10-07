@@ -100,11 +100,16 @@ class ScoreboardExtractor:
             temperature=0.1
         )
 
-        response = client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=[image_part, "Extract the full scoreboard statistics for both teams and all players."],
-            config=config
-        )
+        import asyncio
+
+        def _call_gemini():
+            return client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=[image_part, "Extract the full scoreboard statistics for both teams and all players."],
+                config=config
+            )
+
+        response = await asyncio.to_thread(_call_gemini)
 
         # Parse result
         raw_text = response.text

@@ -8,28 +8,66 @@ import os
 from typing import Dict, Any, List
 from PIL import Image, ImageDraw, ImageFont
 
+_BOLD_FONTS = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+    r"C:\Windows\Fonts\segoeuib.ttf",
+    r"C:\Windows\Fonts\arialbd.ttf",
+)
+_REGULAR_FONTS = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    r"C:\Windows\Fonts\segoeui.ttf",
+    r"C:\Windows\Fonts\arial.ttf",
+)
+
+
+def _short(value, limit: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
+def _as_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 
 class GraphicGenerator:
     """Creates esports-style match summary infographics."""
 
     @staticmethod
     def _load_font(font_name: str, size: int) -> ImageFont.ImageFont:
-        """Helper to load system fonts or fallback to default."""
-        font_paths = [
-            f"C:\\Windows\\Fonts\\{font_name}.ttf",
-            f"C:\\Windows\\Fonts\\{font_name.lower()}.ttf",
+        """Load DejaVu (Linux/Docker), then Windows fonts, then Pillow's default."""
+        bold = font_name.lower() in {"segoeuib", "arialbd", "bold"}
+        font_paths = list(_BOLD_FONTS if bold else _REGULAR_FONTS)
+        font_paths.extend([
+            rf"C:\Windows\Fonts\{font_name}.ttf",
+            rf"C:\Windows\Fonts\{font_name.lower()}.ttf",
             f"/usr/share/fonts/truetype/{font_name}.ttf",
-            f"{font_name}.ttf"
-        ]
+            f"{font_name}.ttf",
+        ])
         for path in font_paths:
             if os.path.exists(path):
                 try:
                     return ImageFont.truetype(path, size)
-                except Exception:
-                    pass
+                except OSError:
+                    continue
         try:
-            return ImageFont.truetype("arial.ttf", size)
-        except Exception:
+            return ImageFont.load_default(size=size)
+        except TypeError:
             return ImageFont.load_default()
 
     @classmethod
@@ -77,19 +115,22 @@ class GraphicGenerator:
         draw.rectangle([0, 0, img_width, 6], fill=accent_cyan)
 
         # Series Title
-        draw.text((50, 28), series_title.upper(), fill=text_white, font=font_title)
+        draw.text((50, 28), _short(series_title.upper(), 42), fill=text_white, font=font_title)
 
         # Map list / mode subtitle
-        maps_str = "  |  ".join([f"M{m.get('map_number')}: {m.get('map_name')} ({m.get('game_mode')})" for m in maps_summary])
+        maps_str = "  |  ".join([
+            f"M{m.get('map_number')}: {m.get('map_name')} ({m.get('game_mode')})"
+            for m in maps_summary if isinstance(m, dict)
+        ])
         if not maps_str:
             maps_str = f"Series of {len(maps_summary)} Maps"
-        draw.text((50, 72), maps_str, fill=text_dim, font=font_subtitle)
+        draw.text((50, 72), _short(maps_str, 110), fill=text_dim, font=font_subtitle)
 
         # Team Score Box (Top Right or Center)
         team_names = list(team_wins.keys())
         if len(team_names) >= 2:
-            t1, t2 = team_names[0], team_names[1]
-            s1, s2 = team_wins.get(t1, 0), team_wins.get(t2, 0)
+            t1, t2 = _short(team_names[0], 18), _short(team_names[1], 18)
+            s1, s2 = team_wins.get(team_names[0], 0), team_wins.get(team_names[1], 0)
             score_text = f"{t1}  {s1} - {s2}  {t2}"
         elif len(team_names) == 1:
             score_text = f"{team_names[0]} ({team_wins.get(team_names[0], 0)} Wins)"
@@ -119,15 +160,19 @@ class GraphicGenerator:
             draw.text((mvp_box_x + 28, mvp_box_y + 14), "SERIES MVP", fill=(10, 10, 15), font=font_badge)
 
             # MVP Name & Team
-            mvp_name = mvp.get("name", "Unknown")
-            mvp_team = mvp.get("team", "")
+            mvp_name = _short(mvp.get("name", "Unknown"), 18)
+            mvp_team = _short(mvp.get("team", ""), 28)
             draw.text((mvp_box_x + 20, mvp_box_y + 44), mvp_name, fill=text_white, font=font_title)
             if mvp_team:
                 draw.text((mvp_box_x + 20, mvp_box_y + 82), f"Team: {mvp_team}", fill=accent_cyan, font=font_subtitle)
 
-            # MVP Stat highlights
-            mvp_stats_str = f"K/D: {mvp.get('kd'):.2f}  •  Avg Kills: {mvp.get('avg_kills')}  •  Total Dmg: {mvp.get('damage'):,}"
-            draw.text((mvp_box_x + 20, mvp_box_y + 114), mvp_stats_str, fill=text_dim, font=font_header)
+            # Keep this on one line inside the 420px MVP card.
+            mvp_stats_str = (
+                f"K/D {_as_float(mvp.get('kd')):.2f}   "
+                f"Avg K {mvp.get('avg_kills', 0)}   "
+                f"Dmg {_as_int(mvp.get('damage')):,}"
+            )
+            draw.text((mvp_box_x + 20, mvp_box_y + 114), mvp_stats_str, fill=text_dim, font=font_body)
 
         # Series Score Showcase Box (Right)
         score_box_x = 490
@@ -145,9 +190,9 @@ class GraphicGenerator:
         top_dmg = series_data.get("top_damage")
         leaders_line = []
         if top_k:
-            leaders_line.append(f"Most Kills: {top_k.get('name')} ({top_k.get('kills')})")
+            leaders_line.append(f"Most Kills: {_short(top_k.get('name'), 16)} ({_as_int(top_k.get('kills'))})")
         if top_dmg:
-            leaders_line.append(f"Most Damage: {top_dmg.get('name')} ({top_dmg.get('damage'):,})")
+            leaders_line.append(f"Most Damage: {_short(top_dmg.get('name'), 16)} ({_as_int(top_dmg.get('damage')):,})")
         draw.text((score_box_x + 24, score_box_y + 114), "  |  ".join(leaders_line), fill=text_dim, font=font_header)
 
         # STATS TABLE
@@ -162,8 +207,8 @@ class GraphicGenerator:
             ("K/D", 650, "center"),
             ("AVG K", 740, "center"),
             ("AVG D", 830, "center"),
-            ("DAMAGE", 940, "right"),
-            ("AVG DMG", 1100, "right"),
+            ("DAMAGE", 930, "right"),
+            ("AVG DMG", 1040, "right"),
         ]
 
         # Draw Table Header
@@ -182,14 +227,14 @@ class GraphicGenerator:
                 draw.rectangle([50, curr_y, img_width - 50, curr_y + row_height], fill=row_alt)
 
             # Player name with MVP crown/badge if applicable
-            p_name = p.get("name", "Player")
+            p_name = _short(p.get("name", "Player"), 16)
             if mvp and p.get("name") == mvp.get("name"):
-                draw.text((70, curr_y + 10), f"[MVP] {p_name}", fill=accent_gold, font=font_bold)
+                draw.text((70, curr_y + 10), f"[MVP] {_short(p_name, 12)}", fill=accent_gold, font=font_bold)
             else:
                 draw.text((70, curr_y + 10), p_name, fill=text_white, font=font_bold)
 
             # Team
-            draw.text((240, curr_y + 10), str(p.get("team", "-")), fill=text_dim, font=font_body)
+            draw.text((240, curr_y + 10), _short(p.get("team", "-"), 14), fill=text_dim, font=font_body)
 
             # Maps
             draw.text((370, curr_y + 10), str(p.get("maps_played", 1)), fill=text_white, font=font_body)
@@ -201,13 +246,13 @@ class GraphicGenerator:
             draw.text((505, curr_y + 10), str(p.get("deaths", 0)), fill=text_white, font=font_body)
 
             # +/- Differential
-            diff = p.get("plus_minus", 0)
+            diff = _as_int(p.get("plus_minus", 0))
             diff_str = f"+{diff}" if diff > 0 else str(diff)
             diff_color = text_green if diff > 0 else (text_red if diff < 0 else text_dim)
             draw.text((575, curr_y + 10), diff_str, fill=diff_color, font=font_bold)
 
             # K/D Ratio
-            kd = p.get("kd", 1.0)
+            kd = _as_float(p.get("kd"), 1.0)
             kd_str = f"{kd:.2f}"
             kd_color = text_green if kd >= 1.0 else text_red
             draw.text((655, curr_y + 10), kd_str, fill=kd_color, font=font_bold)
@@ -219,10 +264,10 @@ class GraphicGenerator:
             draw.text((840, curr_y + 10), str(p.get("avg_deaths", 0.0)), fill=text_white, font=font_body)
 
             # Total Damage
-            draw.text((940, curr_y + 10), f"{p.get('damage', 0):,}", fill=text_white, font=font_body)
+            draw.text((930, curr_y + 10), f"{_as_int(p.get('damage', 0)):,}", fill=text_white, font=font_body)
 
             # Avg Damage
-            draw.text((1080, curr_y + 10), f"{p.get('avg_damage', 0):,}", fill=accent_cyan, font=font_bold)
+            draw.text((1040, curr_y + 10), f"{_as_float(p.get('avg_damage', 0)):,.0f}", fill=accent_cyan, font=font_bold)
 
             # Bottom separator line
             draw.line([50, curr_y + row_height, img_width - 50, curr_y + row_height], fill=line_color, width=1)

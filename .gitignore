@@ -1,20 +1,23 @@
-# Environment secrets (NEVER commit tokens to GitHub)
+# Environment secrets (never commit tokens)
 .env
-.env.local
-*.env
+.env.*
+!.env.example
 
 # Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environment
+.venv/
 venv/
 env/
 ENV/
 
-# Output match files
+# Output match files and local series database
 cli_series_summary.*
 cod_series_*
 *.log

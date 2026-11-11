@@ -4,7 +4,9 @@ Exports series summary and map-by-map player performance to CSV format.
 """
 import io
 import csv
-from typing import Dict, Any, List
+from typing import Dict, Any
+
+from safety import csv_cell
 
 
 class CSVExporter:
@@ -21,16 +23,22 @@ class CSVExporter:
 
         # Header Info
         writer.writerow(["=== CALL OF DUTY LEAGUE STATS EXPORT ==="])
-        writer.writerow(["Series Title", series_title])
+        writer.writerow(["Series Title", csv_cell(series_title)])
         writer.writerow(["Total Maps", series_data.get("total_maps", 0)])
 
         team_wins = series_data.get("team_wins", {})
         if team_wins:
-            writer.writerow(["Team Record", " vs ".join([f"{t}: {w}" for t, w in team_wins.items()])])
+            record = " vs ".join([f"{t}: {w}" for t, w in team_wins.items()])
+            writer.writerow(["Team Record", csv_cell(record)])
 
         mvp = series_data.get("mvp")
         if mvp:
-            writer.writerow(["Series MVP", mvp.get("name"), f"K/D: {mvp.get('kd')}", f"Avg Kills: {mvp.get('avg_kills')}"])
+            writer.writerow([
+                "Series MVP",
+                csv_cell(mvp.get("name")),
+                f"K/D: {mvp.get('kd')}",
+                f"Avg Kills: {mvp.get('avg_kills')}",
+            ])
         writer.writerow([])
 
         # Section 1: Consolidated Overall Series Averages
@@ -56,8 +64,8 @@ class CSVExporter:
 
         for p in series_data.get("players", []):
             writer.writerow([
-                p.get("name"),
-                p.get("team"),
+                csv_cell(p.get("name")),
+                csv_cell(p.get("team")),
                 p.get("maps_played"),
                 p.get("kills"),
                 p.get("deaths"),
@@ -98,10 +106,10 @@ class CSVExporter:
             for rec in p.get("map_records", []):
                 writer.writerow([
                     rec.get("map_number"),
-                    rec.get("map_name"),
-                    rec.get("game_mode"),
-                    p.get("name"),
-                    p.get("team"),
+                    csv_cell(rec.get("map_name")),
+                    csv_cell(rec.get("game_mode")),
+                    csv_cell(p.get("name")),
+                    csv_cell(p.get("team")),
                     rec.get("kills"),
                     rec.get("deaths"),
                     rec.get("plus_minus"),
@@ -109,7 +117,7 @@ class CSVExporter:
                     rec.get("assists"),
                     rec.get("damage"),
                     rec.get("score"),
-                    rec.get("objective", "")
+                    csv_cell(rec.get("objective", "")),
                 ])
 
         output.seek(0)

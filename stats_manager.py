@@ -2,8 +2,10 @@
 Call of Duty League Stats Aggregator
 Handles stat calculation, averages, K/D ratios, and MVP determination.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from collections import defaultdict
+
+from safety import clamp_int
 
 
 class StatsManager:
@@ -52,6 +54,7 @@ class StatsManager:
             }
         ]
         """
+        maps_data = [item for item in maps_data if isinstance(item, dict)]
         if not maps_data:
             return {
                 "total_maps": 0,
@@ -81,15 +84,19 @@ class StatsManager:
 
         for m_idx, map_info in enumerate(maps_data, start=1):
             map_num = map_info.get("map_number", m_idx)
-            map_name = map_info.get("map_name", f"Map {map_num}")
-            game_mode = map_info.get("game_mode", "Multiplayer")
-            t1_name = map_info.get("team1_name", "Team 1")
-            t2_name = map_info.get("team2_name", "Team 2")
-            t1_score = map_info.get("team1_score", 0)
-            t2_score = map_info.get("team2_score", 0)
+            map_name = map_info.get("map_name") or f"Map {map_num}"
+            game_mode = map_info.get("game_mode") or "Multiplayer"
+            t1_name = map_info.get("team1_name") or "Team 1"
+            t2_name = map_info.get("team2_name") or "Team 2"
+            t1_score = clamp_int(map_info.get("team1_score", 0))
+            t2_score = clamp_int(map_info.get("team2_score", 0))
 
             team_total_scores[t1_name] += t1_score
             team_total_scores[t2_name] += t2_score
+            # Record both teams even when one of them never wins a map.
+            for team_name in (t1_name, t2_name):
+                if team_name:
+                    team_wins.setdefault(team_name, 0)
 
             if t1_score > t2_score:
                 team_wins[t1_name] += 1
@@ -111,9 +118,13 @@ class StatsManager:
                 "winner": winner
             })
 
-            # Process players
-            for p in map_info.get("players", []):
-                pname = p.get("name", "").strip()
+            raw_players = map_info.get("players") or []
+            if not isinstance(raw_players, list):
+                raw_players = []
+            for p in raw_players:
+                if not isinstance(p, dict):
+                    continue
+                pname = str(p.get("name", "")).strip()
                 if not pname:
                     continue
 
@@ -124,11 +135,11 @@ class StatsManager:
                 if p.get("team"):
                     rec["team"] = p.get("team")
                 
-                pkills = int(p.get("kills", 0) or 0)
-                pdeaths = int(p.get("deaths", 0) or 0)
-                passists = int(p.get("assists", 0) or 0)
-                pdamage = int(p.get("damage", 0) or 0)
-                pscore = int(p.get("score", 0) or 0)
+                pkills = clamp_int(p.get("kills", 0))
+                pdeaths = clamp_int(p.get("deaths", 0))
+                passists = clamp_int(p.get("assists", 0))
+                pdamage = clamp_int(p.get("damage", 0))
+                pscore = clamp_int(p.get("score", 0))
 
                 rec["maps_played"] += 1
                 rec["kills"] += pkills

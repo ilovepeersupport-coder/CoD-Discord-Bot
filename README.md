@@ -1,104 +1,107 @@
-# 🎮 Call of Duty League Stats Discord Bot
+# Call of Duty League Stats Discord Bot
 
-Automate your Call of Duty League match night stats! Instead of manually typing in kills, deaths, assists, and damage after every map and averaging them by hand, simply **upload your end-game scoreboard screenshots**. 
+Upload an end-game scoreboard screenshot. The bot reads player names, kills, deaths, assists, damage, and score, keeps them across a Best-of series, and posts a summary image plus a CSV.
 
-The bot automatically parses each scoreboard, tracks player performance across a Best-of-3 (or Best-of-5) series, calculates all player totals & averages, and produces **broadcast-grade esports infographic cards** and **CSV spreadsheets** ready for Google Sheets or Excel.
+It is a Discord slash-command bot. A small command-line tool can process screenshots without Discord.
 
----
+## What it does
 
-## 🌟 Key Features
+- `/start_series` opens a match in the current channel (two teams, best of 1–9).
+- `/upload_map` reads one scoreboard and adds or replaces that map.
+- `/series_summary` totals the series, picks an MVP, and attaches a PNG card and a CSV file.
+- `/quick_scan` does the same read for a single screenshot, without a series.
+- `/series_status` lists the maps already stored.
+- `/edit_stat`, `/remove_map`, and `/reset_series` correct mistakes. The person who started the series, or someone with Manage Messages, can use these. Series saved before that rule existed stay editable by anyone in the channel.
+- `/set_engine` picks Gemini or local OCR for that channel until the bot restarts.
+- `/cod_help` shows the short version of this list.
 
-- **📸 Instant Screenshot Parsing**: Uses Gemini AI Vision (`gemini-3.8-flash`) to accurately extract player gamertags (handling clan tags like `[FaZe]`), eliminations/kills, deaths, assists, damage, score, and objective time. Also includes a local OCR fallback.
-- **📈 Automatic Series Averages**: Tracks stats across Map 1, Map 2, Map 3, etc., and computes:
-  - Total Kills, Deaths, Assists, Damage, Score
-  - Overall K/D ratio ($Kills / Deaths$) and $+/-$ Kill Differential
-  - Per-map averages (Avg Kills, Avg Deaths, Avg Damage, Avg Score)
-  - Map-by-map performance records per player
-- **🏆 Series MVP & Leaderboards**: Automatically calculates the Series MVP and highlights the top three players by MVP rating, alongside Most Kills, Most Damage, and Top K/D.
-- **🎨 Broadcast-Quality Infographic Card**: Dynamically generates a sleek, dark-mode CDL-style match summary image (`.png`) with team scores, MVP badge, and color-coded K/D table.
-- **📊 One-Click CSV Export**: Attaches a clean `.csv` spreadsheet to easily import match data directly into Google Sheets or league tracking spreadsheets.
-- **✏️ Quick Corrections**: Typo or weird character? Easily adjust any number with `/edit_stat [player] [stat] [value]` in seconds.
-- **💾 Persistent Active Series**: Active matches and uploaded map stats are stored in SQLite and restored after the bot restarts.
+Active series are stored in SQLite and restored after a restart. The scoreboard reader is Gemini by default. Local OCR is a fallback: it needs Tesseract, cannot tell the teams apart, and often misreads digits.
 
----
+## Requirements
 
-## 🚀 Quick Setup Guide (5 Minutes)
+- Python 3.11 or newer
+- A Discord application token
+- A Gemini API key, unless you only want the OCR fallback
+- Tesseract OCR (`tesseract-ocr`) only if you use local OCR
 
-### Step 1: Install Dependencies
-Open PowerShell or Command Prompt in this folder and run:
+## Setup
+
 ```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
 ```
 
-### Step 2: Configure Environment (`.env`)
-Copy `.env.example` to `.env`:
-```bash
-copy .env.example .env
-```
-Open `.env` and fill in your keys:
-1. **`DISCORD_BOT_TOKEN`**:
-   - Go to the [Discord Developer Portal](https://discord.com/developers/applications).
-   - Click **New Application** (e.g. name it "CoD League Stats").
-   - Click on the **Bot** tab on the left.
-   - Click **Reset Token** and copy your token into `.env`.
-   - Scroll down to **Privileged Gateway Intents** and enable **Message Content Intent**.
-   - Under **OAuth2** -> **URL Generator**, select `bot` and `applications.commands`.
-   - Under **Bot Permissions**, check:
-     - `Send Messages`
-     - `Attach Files`
-     - `Embed Links`
-     - `Read Message History`
-   - Copy the generated URL into your browser to invite the bot to your Discord server!
+On Windows, activate with `.venv\Scripts\activate` and copy the example with `copy .env.example .env`.
 
-2. **`GEMINI_API_KEY`**:
-   - Get a free key at [Google AI Studio](https://aistudio.google.com/app/apikey).
-   - Paste the key into `GEMINI_API_KEY=` in your `.env` file.
+Put the real values in `.env`, next to `bot.py`. The file is gitignored. `.env.example` only contains placeholders.
 
-3. **`SERIES_DB_PATH`** (optional):
-   - Defaults to `cod_bot.db` in the bot's working directory.
-   - For hosted deployments, point this to a persistent disk/volume so active series remain available across restarts or redeploys. The database file is created automatically.
+| Variable | Required | Purpose |
+|---|---|---|
+| `DISCORD_BOT_TOKEN` | Yes | Bot token. `DISCORD_TOKEN` is accepted as a fallback name. |
+| `GEMINI_API_KEY` | Yes for the default engine | Google AI Studio key used to read screenshots. |
+| `DEFAULT_ENGINE` | No | `gemini` (default) or `ocr`. |
+| `GEMINI_MODELS` | No | Comma-separated model fallback order. |
+| `SERIES_DB_PATH` | No | SQLite path. Relative paths are resolved next to `bot.py`. |
+| `EXTRACT_COOLDOWN_SECONDS` | No | Per-user pause between screenshot reads. Default `5`. |
+| `SYNC_COMMANDS` | No | Sync slash commands on login. Default `true`. |
+| `DISCORD_GUILD_ID` | No | Sync commands to one server immediately while testing. |
 
-### Step 3: Run the Bot
+## Discord Developer Portal
+
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create an application.
+2. Open **Bot**, click **Reset Token**, and paste that token into `DISCORD_BOT_TOKEN`. Reset it again if it is ever pasted into a chat, a screenshot, or a log.
+3. Leave **Privileged Gateway Intents** off. This bot does not read message text, member lists, or presences. It only receives slash-command arguments, including the uploaded screenshot. Requesting the Message Content intent makes Discord refuse the login when that toggle is off, and this bot does not need it.
+4. Open **OAuth2 → URL Generator**. Select the scopes `bot` and `applications.commands`.
+5. Select these bot permissions:
+   - Send Messages
+   - Embed Links
+   - Attach Files
+   - Read Message History
+6. Open the generated URL and invite the bot to your server.
+
+Global slash commands can take up to an hour to appear. For a faster loop while testing, set `DISCORD_GUILD_ID` to that server's ID and restart the bot. Clear it before you rely on the bot in more than one server, or the commands will only be registered there.
+
+## Run
+
 ```bash
 python bot.py
 ```
-When you see `Bot logged in as CoD League Stats... Synced application commands`, you're ready!
 
----
+`python main.py` does the same thing, for hosts that look for `main.py`. The process exits immediately if `DISCORD_BOT_TOKEN` is missing. When the token is valid it logs in and syncs commands.
 
-## 🕹️ Discord Bot Commands
+A `Procfile` runs `python bot.py` for worker-style hosts.
 
-| Command | Description |
-|---|---|
-| `/start_series` | Initializes a new match session (e.g. `/start_series name:"Week 2" team1:"OpTic" team2:"FaZe" best_of:3`) |
-| `/upload_map` | Upload the scoreboard screenshot image after each map. Instantly confirms extracted stats. |
-| `/series_summary` | Calculates final series averages, generates the **infographic card**, and attaches the **CSV spreadsheet**! |
-| `/quick_scan` | Scan a single scoreboard screenshot without starting a series. |
-| `/series_status` | View all maps recorded so far in the current session. |
-| `/edit_stat` | Manually fix any stat if needed (e.g. `/edit_stat player:"Shotzzy" stat:"kills" new_value:32`). |
-| `/remove_map` | Remove an incorrectly uploaded map from the active series. |
-| `/reset_series` | Clear the active series in the channel to start fresh. |
-| `/set_engine` | Switch between Gemini AI Vision (recommended) and Local OCR. |
-| `/cod_help` | Displays the help menu with all commands and instructions. |
+### Docker
 
----
+The image runs as uid `10001`, includes DejaVu fonts and Tesseract, and stores series in `/data/cod_bot.db`.
 
-## 💻 Standalone Offline / CLI Tool
-
-You can also test or process match screenshots directly from your terminal without opening Discord:
 ```bash
-python cli_test.py map1_screenshot.png map2_screenshot.png map3_screenshot.png
+docker build -t cod-bot .
+docker run --env-file .env -v cod-data:/data cod-bot
 ```
-This will extract all stats, calculate the series averages, and output:
-- `cli_series_summary.png` (infographic image)
-- `cli_series_summary.csv` (spreadsheet)
 
----
+A named volume picks up the directory owner from the image. For a bind mount, the host directory has to be writable by uid `10001`.
 
-## 🧪 Testing
+### Screenshots from the terminal
 
-To run the automated test suite and preview sample generated graphics:
 ```bash
-python test_suite.py
+python cli_test.py map1.png map2.png map3.png
 ```
-This tests math formulas, averages, K/D calculations, and verifies that `sample_match_summary.png` and `sample_export.csv` generate properly.
+
+This writes `cli_series_summary.png` and `cli_series_summary.csv` in the current directory.
+
+## Tests
+
+```bash
+python -m unittest discover -s . -p 'test_*.py'
+```
+
+The tests cover stat math, the summary image, CSV export, SQLite restore, image limits, and command registration. They do not call Discord or Gemini. `python bot.py` with no token should exit with status 1 and mention `DISCORD_BOT_TOKEN`.
+
+## Notes
+
+- Screenshot uploads are limited to PNG, JPG, WEBP, and GIF files under 8 MB. The bot re-encodes them to a bounded PNG before Gemini or OCR sees them.
+- Player names from screenshots are untrusted. The bot does not ping `@everyone`, users, or roles, and CSV text cells that start with `=`, `+`, `-`, or `@` are prefixed so a spreadsheet does not treat them as formulas.
+- No live Discord token or Gemini key is stored in this repository. Keep `.env` untracked. If a real token was ever shared outside this repo, reset it in the Developer Portal or Google AI Studio.

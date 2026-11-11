@@ -1,7 +1,9 @@
-discord.py>=2.3.0
-pillow>=10.0.0
-google-genai>=2.25.0
-python-dotenv>=1.0.0
-tabulate>=0.9.0
-pytesseract>=0.3.10
-pydantic>=2.0.0
+# Python 3.11 or newer.
+# Floors are the versions verified for this bot. Pillow 13 fixes image-decoder
+# vulnerabilities that matter because the bot opens untrusted screenshots.
+discord.py>=2.5.2,<3
+pillow>=13.0.0,<14
+google-genai>=2.25.0,<4
+python-dotenv>=1.0.1,<2
+pytesseract>=0.3.13
+pydantic>=2.12.5,<3

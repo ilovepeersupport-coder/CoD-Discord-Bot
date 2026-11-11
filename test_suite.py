@@ -2,8 +2,6 @@
 Test suite for Call of Duty League Stats Bot
 Verifies StatsManager calculations, GraphicGenerator image output, and CSVExporter.
 """
-import io
-import os
 import unittest
 from stats_manager import StatsManager
 from image_generator import GraphicGenerator
@@ -101,6 +99,47 @@ class TestCoDStats(unittest.TestCase):
         self.assertEqual(result["top_players"][0]["name"], mvp["name"])
         print(f"\n[Test] Calculated MVP: {mvp['name']} with K/D {mvp['kd']} and Rating {mvp['mvp_rating']}")
 
+    def test_sweep_keeps_the_team_that_never_won(self):
+        maps = []
+        for template in (MOCK_SERIES_MAPS[0], MOCK_SERIES_MAPS[2]):
+            game = dict(template)
+            game["team1_score"] = 250
+            game["team2_score"] = 100
+            maps.append(game)
+        result = StatsManager.aggregate_series_stats(maps)
+        self.assertEqual(result["team_wins"]["OpTic Texas"], 2)
+        self.assertEqual(result["team_wins"]["Atlanta FaZe"], 0)
+
+    def test_bad_rows_and_stat_caps_do_not_crash(self):
+        result = StatsManager.aggregate_series_stats([
+            {
+                "map_number": 1,
+                "team1_name": "OpTic",
+                "team2_name": None,
+                "team1_score": 250,
+                "team2_score": 100,
+                "players": [
+                    {"name": "Shotzzy", "team": "OpTic", "kills": 10**9, "deaths": "2", "assists": "nope", "damage": "1,200", "score": -4},
+                    "not-a-player",
+                ],
+            },
+            "not-a-map",
+        ])
+        self.assertEqual(result["total_maps"], 1)
+        self.assertEqual(result["team_wins"]["OpTic"], 1)
+        self.assertEqual(result["team_wins"]["Team 2"], 0)
+        player = result["players"][0]
+        self.assertEqual(player["kills"], 1_000_000)
+        self.assertEqual(player["deaths"], 2)
+        self.assertEqual(player["assists"], 0)
+        self.assertEqual(player["damage"], 1200)
+        self.assertEqual(player["score"], 0)
+
+    def test_empty_series_has_no_mvp(self):
+        result = StatsManager.aggregate_series_stats([])
+        self.assertIsNone(result["mvp"])
+        self.assertEqual(result["players"], [])
+
     def test_graphic_generation(self):
         result = StatsManager.aggregate_series_stats(MOCK_SERIES_MAPS)
         img_buffer = GraphicGenerator.generate_series_card(result, series_title="CDL CHAMPIONSHIP: OPTIC VS FAZE")
@@ -120,9 +159,45 @@ class TestCoDStats(unittest.TestCase):
         self.assertIn("Simp", csv_content)
         self.assertIn("MAP-BY-MAP BREAKDOWN", csv_content)
 
-        with open("sample_export.csv", "w", encoding="utf-8") as f:
-            f.write(csv_content)
+        with open("sample_export.csv", "w", encoding="utf-8") as handle:
+            handle.write(csv_content)
         print(f"[Test] Successfully generated 'sample_export.csv' ({len(csv_content)} characters)")
+
+    def test_csv_neutralizes_formula_text(self):
+        result = StatsManager.aggregate_series_stats([
+            {
+                "map_number": 1,
+                "map_name": "=HYPERLINK(\"http://example.test\")",
+                "game_mode": "Hardpoint",
+                "team1_name": "OpTic",
+                "team2_name": "FaZe",
+                "team1_score": 250,
+                "team2_score": 100,
+                "players": [{
+                    "name": "=cmd|' /C calc'!A0",
+                    "team": "+FaZe",
+                    "kills": 10,
+                    "deaths": 5,
+                    "assists": 1,
+                    "damage": 1000,
+                    "score": 500,
+                    "objective": "@SUM(A1:A9)",
+                }],
+            }
+        ])
+        csv_content = CSVExporter.generate_series_csv(result, series_title="=1+1").getvalue()
+        self.assertIn("'=cmd|' /C calc'!A0", csv_content)
+        self.assertIn("'+FaZe", csv_content)
+        self.assertIn("'@SUM(A1:A9)", csv_content)
+        self.assertIn("'=1+1", csv_content)
+        self.assertNotRegex(csv_content, r"(?m)^=cmd")
+
+    def test_graphic_survives_missing_mvp(self):
+        buffer = GraphicGenerator.generate_series_card(
+            {"players": [], "mvp": None, "team_wins": {}, "maps_summary": []},
+            series_title="EMPTY",
+        )
+        self.assertGreater(buffer.getbuffer().nbytes, 1000)
 
 
 if __name__ == "__main__":

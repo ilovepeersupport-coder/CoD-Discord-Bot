@@ -8,13 +8,14 @@ Usage:
 import sys
 import os
 import asyncio
+from pathlib import Path
 from extractor import ScoreboardExtractor
 from stats_manager import StatsManager
 from image_generator import GraphicGenerator
 from csv_exporter import CSVExporter
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 async def process_screenshots(image_paths):
@@ -55,8 +56,8 @@ async def process_screenshots(image_paths):
         print(f"✅ Extracted {len(map_entry['players'])} players from {map_entry['map_name']} ({map_entry['game_mode']})")
 
     if not maps_data:
-        print("\n⚠️ No map data extracted. Ensure images are valid scoreboard screenshots.")
-        return
+        print("\nNo map data extracted. Use scoreboard screenshots, and set GEMINI_API_KEY for accurate reads.")
+        return 1
 
     # Aggregate
     print("\n" + "=" * 60)
@@ -65,7 +66,10 @@ async def process_screenshots(image_paths):
     series_result = StatsManager.aggregate_series_stats(maps_data)
 
     mvp = series_result.get("mvp")
-    print(f"\n🌟 SERIES MVP: {mvp.get('name')} | K/D: {mvp.get('kd'):.2f} | Avg Kills: {mvp.get('avg_kills')} | Damage: {mvp.get('damage'):,}")
+    if not mvp:
+        print("\nNo player stats were found in the extracted maps.")
+    else:
+        print(f"\nSERIES MVP: {mvp.get('name')} | K/D: {mvp.get('kd'):.2f} | Avg Kills: {mvp.get('avg_kills')} | Damage: {mvp.get('damage'):,}")
 
     print("\n--- PLAYER SERIES AVERAGES ---")
     header = f"{'Player':<16} {'Team':<12} {'Maps':<5} {'K':<4} {'D':<4} {'+/-':<5} {'K/D':<6} {'Avg K':<6} {'Avg D':<6} {'Total Dmg':<10}"
@@ -88,15 +92,16 @@ async def process_screenshots(image_paths):
     out_csv = "cli_series_summary.csv"
     with open(out_csv, "w", encoding="utf-8") as f:
         f.write(csv_stream.getvalue())
-    print(f"📄 Generated CSV spreadsheet: {out_csv}")
-    print("\n Done!")
+    print(f"Generated CSV spreadsheet: {out_csv}")
+    print("\nDone.")
+    return 0
 
 
 def main():
     if len(sys.argv) < 2:
         print("Usage: python cli_test.py <screenshot1.png> [screenshot2.png ...]")
-        sys.exit(0)
-    asyncio.run(process_screenshots(sys.argv[1:]))
+        sys.exit(2)
+    sys.exit(asyncio.run(process_screenshots(sys.argv[1:])) or 0)
 
 
 if __name__ == "__main__":
